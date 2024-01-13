@@ -1,0 +1,105 @@
+Run kube-bench and Obtain a CIS Benchmark Report
+Download the kube-bench Job manifest files:
+************
+wget -O kube-bench-control-plane.yaml https://raw.githubusercontent.com/aquasecurity/kube-bench/main/jobmaster.yaml
+wget -O kube-bench-node.yaml https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job-node.yaml
+************
+wget -O kube-bench-control-plane.yaml https://raw.githubusercontent.com/ACloudGuru-Resources/Course-Certified-Kubernetes-Security-Specialist/main/kube-bench-control-plane.yaml
+wget -O kube-bench-node.yaml https://raw.githubusercontent.com/ACloudGuru-Resources/Course-Certified-Kubernetes-Security-Specialist/main/kube-bench-node.yaml
+Create the Jobs to run the benchmark files:
+
+kubectl create -f kube-bench-control-plane.yaml
+kubectl create -f kube-bench-node.yaml
+Check the status of the Jobs:
+
+kubectl get pods
+Save the benchmark results on the Job's Pod logs, replacing the Pod name placeholder values with the actual Pod names:
+
+kubectl logs <CONTROL_PLANE_JOB_POD_NAME> > /home/cloud_user/kube-bench-control.log
+kubectl logs <NODE_JOB_POD_NAME> > /home/cloud_user/kube-bench-worker.log
+Turn Off Profiling for the API Server, Controller Manager, and Scheduler
+View the kube-bench test results for the control plane:
+
+cat /home/cloud_user/kube-bench-control.log
+*******Turnoff Profiling in kube-apiserver, kube-controller and kube-scheduler*********
+
+sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
+Under containers:, add the following command beneath kube-apiserver to turn off profiling:
+
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    - --profiling=false
+
+    ...
+To save and exit the file, press Escape and enter :wq.
+
+Repeat the process above to turn off profiling for the Kubernetes controller manager:
+
+sudo vi /etc/kubernetes/manifests/kube-controller-manager.yaml
+spec:
+  containers:
+  - command:
+    - kube-controller-manager
+    - --profiling=false
+
+    ...
+Repeat the process again to turn off profiling for the Kubernetes scheduler:
+
+sudo vi /etc/kubernetes/manifests/kube-scheduler.yaml
+spec:
+  containers:
+  - command:
+    - kube-scheduler
+    - --profiling=false
+
+    ...
+Restart kubelet:
+
+sudo systemctl restart kubelet
+Check the Pods:
+
+kubectl get pods -n kube-system
+
+*******Set kubelet authn/authz to Use Webhook Mode*********
+View the kube-bench test results for the worker node:
+
+cat /home/cloud_user/kube-bench-worker.log
+
+ssh cloud_user@<PUBLIC_IP_ADDRESS>
+
+sudo vi /var/lib/kubelet/config.yaml
+Set authorization.mode to Webhook:
+
+authorization:
+  mode: Webhook
+Press Escape and enter :wq.
+
+Restart kubelet:
+
+sudo systemctl restart kubelet
+To verify the issues were fixed, return to the control plane server and delete the existing Jobs:
+
+kubectl delete job kube-bench-master
+kubectl delete job kube-bench-node
+Re-run the Jobs:
+
+kubectl create -f kube-bench-control-plane.yaml
+kubectl create -f kube-bench-node.yaml
+Check the Pods:
+
+kubectl get pods
+Once the STATUS shows Completed, view the Pod logs, replacing the Pod name placeholder values with the actual Pod names:
+
+kubectl logs <CONTROL_PLANE_JOB_POD_NAME>
+kubectl logs <NODE_JOB_POD_NAME>
+Check the results of the kube-bench tests. For the tests addressed, the results should now show [PASS]!
+
+Even though the issues are fixed, a few outputs from kubectl logs may still show [FAIL] checks due to a known issue. In this case, you can alternatively download and install kube-bench for more accurate results:
+
+curl -L https://github.com/aquasecurity/kube-bench/releases/download/v0.6.9/kube-bench_0.6.9_linux_amd64.deb -o kube-bench_0.6.9_linux_amd64.deb
+sudo apt install ./kube-bench_0.6.9_linux_amd64.deb -f
+Run kube-bench filtering "profiling" and "authorization" to confirm:
+
+sudo kube-bench | egrep "profiling|authorization"
